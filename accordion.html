@@ -1,92 +1,123 @@
 <div class="gee-accordion">
-  <button class="view-toggle">View Rwanda Built-up Classification Code ▼</button>
+  <button class="view-toggle">View GEE Classification Code ▼</button>
   <div class="code-content">
-    <pre id="gee-code" style="background:#f8f8f8;padding:15px;border-radius:4px;overflow-x:auto;">
-/**************************************************************
- Mapping built-up vs. non-built-up areas using Sentinel-2 and
- Random Forest classifier with provided MultiPoint training data.
-**************************************************************/
+    <pre style="background:#f8f8f8;padding:15px;border-radius:4px;overflow-x:auto;">
+// =========================================================
+// 🟩 STEP 1: Define New Area of Interest (AOI)
+// =========================================================
+var aoi = ee.Geometry.Polygon([
+  [[29.95, -2.15],
+   [30.25, -2.15],
+   [30.25, -1.75],
+   [29.95, -1.75],
+   [29.95, -2.15]]  // Define the coordinates for the AOI
+]);
 
-// Load Rwanda boundary
-var countries = ee.FeatureCollection("USDOS/LSIB_SIMPLE/2017");
-var roi = countries.filter(ee.Filter.eq('country_na', 'Rwanda'));
-Map.centerObject(roi, 8);
-Map.addLayer(roi, {}, 'Rwanda', false);
+// Visualize AOI on map
+Map.centerObject(aoi, 12);  // Centers the map on the AOI with zoom level 12
+Map.addLayer(aoi, {color: 'blue'}, 'Area of Interest (AOI)');
 
-// NDVI function
-var addNDVI = function(image) {
-  return image.addBands(
-    image.normalizedDifference(['B8', 'B4']).rename('NDVI')
-  );
-};
+// =========================================================
+// 🟩 STEP 2: Define Training Samples (tree and nontree)
+// =========================================================
+var tree = ee.FeatureCollection([
+  ee.Feature(ee.Geometry.Point([29.997, -2.126]), {'class': 0}), // Tree sample point
+  ee.Feature(ee.Geometry.Point([30.000, -2.125]), {'class': 0}),
+  // Add more tree points here
+]);
 
-// Load and preprocess Sentinel-2
-var s2_image = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
-  .filterDate('2024-01-01', '2024-12-01')
-  .filterBounds(roi)
-  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 10))
-  .map(addNDVI)
+var nontree = ee.FeatureCollection([
+  ee.Feature(ee.Geometry.Point([29.998, -2.128]), {'class': 1}), // Non-tree sample point
+  ee.Feature(ee.Geometry.Point([30.002, -2.130]), {'class': 1}),
+  // Add more nontree points here
+]);
+
+// Combine the training samples into a single collection
+var trainingPoints = tree.merge(nontree);
+
+// =========================================================
+// 🟩 STEP 3: Load Sentinel-2 Data within AOI
+// =========================================================
+var s2 = ee.ImageCollection('COPERNICUS/S2_SR')
+  .filterBounds(aoi)  // Use the new AOI to filter the imagery
+  .filterDate('2024-01-01', '2024-12-31')
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .map(function(image) {
+    return image.select(['B2', 'B3', 'B4', 'B8', 'B11', 'B12'])  // Select relevant bands
+                .copyProperties(image, ["system:time_start"]);
+  })
   .median()
-  .clipToCollection(roi);
+  .clip(aoi);  // Clip the imagery to the AOI
 
-// Visualize Sentinel-2
-var visParamsTrue = {bands: ['B4', 'B3', 'B2'], min: 0, max: 3000};
-Map.addLayer(s2_image, visParamsTrue, 'Sentinel-2 RGB');
+// Display the image for reference
+Map.addLayer(s2, {bands: ['B4', 'B3', 'B2'], min: 0, max: 3000}, 'Sentinel-2 RGB');
 
-// Convert MultiPoint Features to FeatureCollections
-var buildingFC = ee.FeatureCollection(building.geometry().coordinates().map(function(coord){
-  return ee.Feature(ee.Geometry.Point(coord), {'Class': 1});
-}));
+// =========================================================
+// 🟩 STEP 4: Create Spectral Indices (NDVI, NDBI, etc.)
+// =========================================================
+var ndvi = s2.normalizedDifference(['B8', 'B4']).rename('NDVI');
+var ndbi = s2.normalizedDifference(['B11', 'B8']).rename('NDBI');
 
-var nonbuidFC = ee.FeatureCollection(nonbuid.geometry().coordinates().map(function(coord){
-  return ee.Feature(ee.Geometry.Point(coord), {'Class': 0});
-}));
+// =========================================================
+// 🟩 STEP 5: Extract Features (including indices)
+// =========================================================
+var features = s2.addBands(ndvi).addBands(ndbi);
 
-// Merge training points
-var trainingPoints = buildingFC.merge(nonbuidFC);
-Map.addLayer(trainingPoints, {}, 'Training Points');
-
-// Define input bands
-var bands = ['B2', 'B3', 'B4', 'B8', 'NDVI'];
-
-// Sample the image at training point locations
-var trainingSample = s2_image.select(bands).sampleRegions({
+// =========================================================
+// 🟩 STEP 6: Sample Training Data from Image
+// =========================================================
+var training = features.sampleRegions({
   collection: trainingPoints,
-  properties: ['Class'],
+  properties: ['class'],
   scale: 10
 });
 
-// Train Random Forest classifier
-var classifier = ee.Classifier.smileRandomForest(50).train({
-  features: trainingSample,
-  classProperty: 'Class',
-  inputProperties: bands
+// =========================================================
+// 🟩 STEP 7: Train Classifier (Random Forest)
+// =========================================================
+var classifier = ee.Classifier.smileRandomForest(100).train({
+  features: training,
+  classProperty: 'class',
+  inputProperties: features.bandNames()
 });
 
-// Classify image
-var classified = s2_image.select(bands).classify(classifier);
+// =========================================================
+// 🟩 STEP 8: Classify Image
+// =========================================================
+var classified = features.classify(classifier);
 
-// Display classification result
-Map.addLayer(classified, {min: 0, max: 1, palette: ['white', 'red']}, 'Built-up Classification');</pre>
-    
-    <div class="github-actions">
-      <button id="copy-btn" class="action-btn">Copy Code</button>
-      <button id="github-btn" class="action-btn">Generate GitHub Commands</button>
-      <div id="github-commands" style="display:none; margin-top:15px;">
-        <p>Run these commands in your terminal:</p>
-        <div style="background:#282c34; color:#abb2bf; padding:15px; border-radius:4px; font-family:monospace;">
-          <code>echo "# rwanda-builtup" >> README.md</code><br>
-          <code>git init</code><br>
-          <code>git add .</code><br>
-          <code>git commit -m "first commit"</code><br>
-          <code>git branch -M main</code><br>
-          <code>git remote add origin https://github.com/p001x/rwanda-builtup.git</code><br>
-          <code>git push -u origin main</code><br>
-        </div>
-        <button id="copy-cmds-btn" class="action-btn" style="margin-top:10px;">Copy Commands</button>
-      </div>
-      <div id="status-msg" style="margin-top:10px;"></div>
-    </div>
+// =========================================================
+// 🟩 STEP 9: Visualize the Classified Map
+// =========================================================
+Map.addLayer(classified, {min: 0, max: 1, palette: ['green', 'red']}, 'Tree vs Non-Tree');
+
+// =========================================================
+// 🟩 STEP 10: Evaluate Accuracy (Confusion Matrix)
+// =========================================================
+var validation = features.sampleRegions({
+  collection: trainingPoints,
+  properties: ['class'],
+  scale: 10,
+  geometries: true
+}).classify(classifier);
+
+var confMatrix = validation.errorMatrix('class', 'classification');
+print('Confusion Matrix:', confMatrix);
+print('Overall Accuracy:', confMatrix.accuracy());
+
+// =========================================================
+// 🟩 STEP 11: Export Classified Image to Google Drive
+// =========================================================
+Export.image.toDrive({
+  image: classified,
+  description: 'Tree_NonTree_Classification',
+  folder: 'GEE_Exports',
+  fileNamePrefix: 'tree_nontree_classified',
+  region: aoi,  // Use the AOI for exporting
+  scale: 10,
+  maxPixels: 1e13,
+  crs: 'EPSG:4326'
+});</pre>
   </div>
 </div>
 
@@ -95,7 +126,6 @@ Map.addLayer(classified, {min: 0, max: 1, palette: ['white', 'red']}, 'Built-up 
     margin: 1rem 0;
     border: 1px solid #e1e1e1;
     border-radius: 5px;
-    font-family: Arial, sans-serif;
   }
   .view-toggle {
     width: 100%;
@@ -118,39 +148,21 @@ Map.addLayer(classified, {min: 0, max: 1, palette: ['white', 'red']}, 'Built-up 
   .view-toggle.active:after {
     content: '▲';
   }
-  .action-btn {
-    padding: 8px 15px;
-    margin-right: 10px;
-    background: #24292e;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-  }
-  .action-btn:hover {
-    background: #2c3136;
-  }
   .code-content {
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.25s ease;
   }
   .code-content.show {
-    max-height: 2500px;
+    max-height: 2000px; /* Adjust based on content height */
     border: 1px solid #e1e1e1;
     border-top: none;
     border-radius: 0 0 4px 4px;
-  }
-  #status-msg {
-    font-size: 14px;
-    padding: 5px;
   }
 </style>
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    // Accordion toggle
     const toggleBtn = document.querySelector('.view-toggle');
     if(toggleBtn) {
       toggleBtn.addEventListener('click', function() {
@@ -158,48 +170,9 @@ Map.addLayer(classified, {min: 0, max: 1, palette: ['white', 'red']}, 'Built-up 
         const content = this.nextElementSibling;
         content.classList.toggle('show');
         this.textContent = this.classList.contains('active') 
-          ? 'Hide Rwanda Built-up Classification Code ▲' 
-          : 'View Rwanda Built-up Classification Code ▼';
+          ? 'Hide GEE Classification Code ▲' 
+          : 'View GEE Classification Code ▼';
       });
-    }
-
-    // Copy code button
-    document.getElementById('copy-btn')?.addEventListener('click', function() {
-      const code = document.getElementById('gee-code').textContent;
-      navigator.clipboard.writeText(code).then(() => {
-        showStatus('Code copied to clipboard!', 'success');
-      });
-    });
-
-    // GitHub commands button
-    document.getElementById('github-btn')?.addEventListener('click', function() {
-      const commandsDiv = document.getElementById('github-commands');
-      commandsDiv.style.display = 'block';
-      showStatus('GitHub commands generated below', 'info');
-    });
-
-    // Copy commands button
-    document.getElementById('copy-cmds-btn')?.addEventListener('click', function() {
-      const commands = [
-        'echo "# rwanda-builtup" >> README.md',
-        'git init',
-        'git add .',
-        'git commit -m "first commit"',
-        'git branch -M main',
-        'git remote add origin https://github.com/p001x/rwanda-builtup.git',
-        'git push -u origin main'
-      ].join('\n');
-      
-      navigator.clipboard.writeText(commands).then(() => {
-        showStatus('Commands copied to clipboard!', 'success');
-      });
-    });
-
-    function showStatus(message, type) {
-      const status = document.getElementById('status-msg');
-      status.textContent = message;
-      status.style.color = type === 'success' ? 'green' : '#0079c1';
-      setTimeout(() => status.textContent = '', 3000);
     }
   });
 </script>
