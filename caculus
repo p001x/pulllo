@@ -1,0 +1,93 @@
+import sympy as sym 
+x=sym.symbols('x')
+derivative1=sym.diff(sym.sin(x),x)
+print(derivative1)
+
+import sympy as sym 
+x=sym.symbols('x')
+derivative=sym.diff(sym.sin(x**2),x)
+print(derivative)
+
+import sympy as sym
+x=sym.symbols('x')
+func=sym.sin(x)**2+sym.exp(x**2)
+derivative=sym.diff(func,x)
+print(derivative)
+
+import sympy as sym
+x=sym.symbols('x')
+func=sym.sin(x)**2+sym.exp(x**2)
+derivative=sym.diff(func,x,3)
+print(derivative)
+
+
+import sympy as sym
+x,y,z=sym.symbols('x,y,z')
+func=x**3*y+y**2+z**3
+deriv=sym.diff(func,x,x)
+print(deriv)
+
+
+import sympy as sym
+x,y,z=sym.symbols('x,y,z')
+func=x**3*y+y**2+z**3
+deriv=sym.diff(func,x,y)
+print(deriv)
+
+
+#sym intergrate(func,var)
+#sym.intergrate(ffunc,lower_limit,upper)
+import sympy as sym 
+x=sym.symbols('x')
+integ=sym.integrate(sym.sin(x),x)
+print(integ) 
+
+
+import sympy as sym
+x=sym.symbols('x')
+integ=sym.integrate(sym.exp(-x),(x,0,sym.oo))
+print(integ)
+
+import sympy as sym 
+x,y=sym.symbols('x,y')
+dinteg=sym.integrate(sym.exp(-x**2-y**2),(x,-sym.oo,sym.oo),(y,-sym.oo,sym.oo))
+print(dinteg)
+
+import sympy as sym 
+x=sym.symbols('x')
+integ=sym.integrate(sym.exp(-x),(x,0,sym.pi))
+print(integ)
+
+import sympy as sym 
+x=sym.symbols('x')
+limit=sym.limit(sym.exp(-x),x,0)
+print(limit)
+
+
+import sympy as sym 
+x=sym.symbols('x')
+limit=sym.limit(sym.exp(-x)/x,x,sym.oo)
+print(limit)
+
+import sympy as sym 
+x=sym.symbols('x')
+func=sym.sin(x)**2 +sym.exp(x**2)
+derivative=sym.diff(func,x)
+print(derivative)
+
+
+#series expansion
+#sym.series(function,x,x0,n)
+import sympy as sym 
+x=sym.symbols('x')
+exp=sym.series(sym.cos(x),x)
+print(exp)
+
+import sympy as sym
+x=sym.symbols('x')
+exp=sym.series(sym.cos(x)**2,x,1,4)
+print(exp)
+
+import sympy as sym 
+x=sym.symbols('x')
+exp=sym.serie'''

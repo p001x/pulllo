@@ -1,0 +1,44 @@
+
+import numpy as np
+x=np.array([[1,3,5,7,9,13,20,20,21,24,26],[5,7,11,14,15,17,18,19,21,22,26]])
+x=x.T
+
+import matplotlib.pyplot as plt
+plt.scatter(x[:,0],x[:,1])
+
+x_meaned=x-np.mean(x,axis=0)
+print(x_meaned)
+plt.figure
+plt.scatter(x_meaned[:,0],x_meaned[:,1])
+plt.scatter(x[:,0],x[:,1])
+
+
+c=np.cov(x_meaned,rowvar=False)
+print(c)
+
+eval,evec=np.linalg.eig(c)
+print(eval)
+print(evec)
+
+
+sorted_index=np.argsort(eval)[::-1]
+sorted_eval=eval[sorted_index]
+sorted_evec=evec[:,sorted_index]
+
+n=1
+evec_subset=sorted_evec[:,0:n]
+print(evec_subset)
+
+x=np.dot(evec_subset.transpose(),x_meaned.transpose()).transpose()
+print(x)
+
+
+from sklearn.decomposition import PCA
+pca=PCA(n_components=1)
+pca.fit(x_meaned)
+xr=pca.transform(x_meaned)
+print(xr)
+
+from sklearn import datasets
+iris=datasets.load_iris()
+iris.get('feature_names')

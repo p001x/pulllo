@@ -1,0 +1,178 @@
+<div class="gee-accordion">
+  <button class="view-toggle">View GEE Classification Code ▼</button>
+  <div class="code-content">
+    <pre style="background:#f8f8f8;padding:15px;border-radius:4px;overflow-x:auto;">
+// =========================================================
+// 🟩 STEP 1: Define New Area of Interest (AOI)
+// =========================================================
+var aoi = ee.Geometry.Polygon([
+  [[29.95, -2.15],
+   [30.25, -2.15],
+   [30.25, -1.75],
+   [29.95, -1.75],
+   [29.95, -2.15]]  // Define the coordinates for the AOI
+]);
+
+// Visualize AOI on map
+Map.centerObject(aoi, 12);  // Centers the map on the AOI with zoom level 12
+Map.addLayer(aoi, {color: 'blue'}, 'Area of Interest (AOI)');
+
+// =========================================================
+// 🟩 STEP 2: Define Training Samples (tree and nontree)
+// =========================================================
+var tree = ee.FeatureCollection([
+  ee.Feature(ee.Geometry.Point([29.997, -2.126]), {'class': 0}), // Tree sample point
+  ee.Feature(ee.Geometry.Point([30.000, -2.125]), {'class': 0}),
+  // Add more tree points here
+]);
+
+var nontree = ee.FeatureCollection([
+  ee.Feature(ee.Geometry.Point([29.998, -2.128]), {'class': 1}), // Non-tree sample point
+  ee.Feature(ee.Geometry.Point([30.002, -2.130]), {'class': 1}),
+  // Add more nontree points here
+]);
+
+// Combine the training samples into a single collection
+var trainingPoints = tree.merge(nontree);
+
+// =========================================================
+// 🟩 STEP 3: Load Sentinel-2 Data within AOI
+// =========================================================
+var s2 = ee.ImageCollection('COPERNICUS/S2_SR')
+  .filterBounds(aoi)  // Use the new AOI to filter the imagery
+  .filterDate('2024-01-01', '2024-12-31')
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .map(function(image) {
+    return image.select(['B2', 'B3', 'B4', 'B8', 'B11', 'B12'])  // Select relevant bands
+                .copyProperties(image, ["system:time_start"]);
+  })
+  .median()
+  .clip(aoi);  // Clip the imagery to the AOI
+
+// Display the image for reference
+Map.addLayer(s2, {bands: ['B4', 'B3', 'B2'], min: 0, max: 3000}, 'Sentinel-2 RGB');
+
+// =========================================================
+// 🟩 STEP 4: Create Spectral Indices (NDVI, NDBI, etc.)
+// =========================================================
+var ndvi = s2.normalizedDifference(['B8', 'B4']).rename('NDVI');
+var ndbi = s2.normalizedDifference(['B11', 'B8']).rename('NDBI');
+
+// =========================================================
+// 🟩 STEP 5: Extract Features (including indices)
+// =========================================================
+var features = s2.addBands(ndvi).addBands(ndbi);
+
+// =========================================================
+// 🟩 STEP 6: Sample Training Data from Image
+// =========================================================
+var training = features.sampleRegions({
+  collection: trainingPoints,
+  properties: ['class'],
+  scale: 10
+});
+
+// =========================================================
+// 🟩 STEP 7: Train Classifier (Random Forest)
+// =========================================================
+var classifier = ee.Classifier.smileRandomForest(100).train({
+  features: training,
+  classProperty: 'class',
+  inputProperties: features.bandNames()
+});
+
+// =========================================================
+// 🟩 STEP 8: Classify Image
+// =========================================================
+var classified = features.classify(classifier);
+
+// =========================================================
+// 🟩 STEP 9: Visualize the Classified Map
+// =========================================================
+Map.addLayer(classified, {min: 0, max: 1, palette: ['green', 'red']}, 'Tree vs Non-Tree');
+
+// =========================================================
+// 🟩 STEP 10: Evaluate Accuracy (Confusion Matrix)
+// =========================================================
+var validation = features.sampleRegions({
+  collection: trainingPoints,
+  properties: ['class'],
+  scale: 10,
+  geometries: true
+}).classify(classifier);
+
+var confMatrix = validation.errorMatrix('class', 'classification');
+print('Confusion Matrix:', confMatrix);
+print('Overall Accuracy:', confMatrix.accuracy());
+
+// =========================================================
+// 🟩 STEP 11: Export Classified Image to Google Drive
+// =========================================================
+Export.image.toDrive({
+  image: classified,
+  description: 'Tree_NonTree_Classification',
+  folder: 'GEE_Exports',
+  fileNamePrefix: 'tree_nontree_classified',
+  region: aoi,  // Use the AOI for exporting
+  scale: 10,
+  maxPixels: 1e13,
+  crs: 'EPSG:4326'
+});</pre>
+  </div>
+</div>
+
+<style>
+  .gee-accordion {
+    margin: 1rem 0;
+    border: 1px solid #e1e1e1;
+    border-radius: 5px;
+  }
+  .view-toggle {
+    width: 100%;
+    padding: 12px 20px;
+    background: #0079c1;
+    color: white;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 16px;
+    position: relative;
+    border-radius: 4px 4px 0 0;
+  }
+  .view-toggle:after {
+    content: '▼';
+    position: absolute;
+    right: 15px;
+    font-size: 14px;
+  }
+  .view-toggle.active:after {
+    content: '▲';
+  }
+  .code-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+  }
+  .code-content.show {
+    max-height: 2000px; /* Adjust based on content height */
+    border: 1px solid #e1e1e1;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleBtn = document.querySelector('.view-toggle');
+    if(toggleBtn) {
+      toggleBtn.addEventListener('click', function() {
+        this.classList.toggle('active');
+        const content = this.nextElementSibling;
+        content.classList.toggle('show');
+        this.textContent = this.classList.contains('active') 
+          ? 'Hide GEE Classification Code ▲' 
+          : 'View GEE Classification Code ▼';
+      });
+    }
+  });
+</script>
