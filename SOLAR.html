@@ -1,0 +1,222 @@
+<div class="climate-accordion">
+  <button class="view-toggle">View ERA5-Land Relative Humidity Analysis ▼</button>
+  <div class="code-content">
+    <pre id="gee-code" style="background:#f8f8f8;padding:15px;border-radius:4px;overflow-x:auto;">
+// Define Study Area ROI
+var roi = ee.Geometry.Polygon([
+  [[29.9, -2.2],
+   [30.3, -2.2],
+   [30.3, -1.7],
+   [29.9, -1.7],
+   [29.9, -2.2]]
+]);
+
+// Load ERA5-Land hourly data for 2023
+var dataset = ee.ImageCollection("ECMWF/ERA5_LAND/HOURLY")
+  .filterBounds(roi)
+  .filterDate('2023-01-01', '2023-12-31')
+  .select(['temperature_2m', 'dewpoint_temperature_2m']);
+
+// Convert temperatures from Kelvin to Celsius
+var tempData = dataset.map(function(img) {
+  var t = img.select('temperature_2m').subtract(273.15);
+  var td = img.select('dewpoint_temperature_2m').subtract(273.15);
+  return t.addBands(td).copyProperties(img, ['system:time_start']);
+});
+
+// Calculate Relative Humidity using the Magnus formula
+var rhCollection = tempData.map(function(img) {
+  var t = img.select('temperature_2m');
+  var td = img.select('dewpoint_temperature_2m');
+  var rh = td.expression(
+    '100 * (exp((17.625 * td) / (243.04 + td)) / exp((17.625 * t) / (243.04 + t)))',
+    {
+      t: t,
+      td: td
+    }).rename('RH');
+  return rh.set('system:time_start', img.get('system:time_start'));
+});
+
+// Calculate the mean RH for the year
+var annualMeanRH = rhCollection.mean().clip(roi);
+
+// Visualization parameters
+var visParams = {
+  min: 20,
+  max: 100,
+  palette: ['white', 'blue', 'green', 'yellow', 'red']
+};
+
+// Add to Map
+Map.centerObject(roi, 10);
+Map.addLayer(annualMeanRH, visParams, 'Mean Relative Humidity 2023 (%)');
+Map.addLayer(roi, {color: 'black'}, 'Study Area');
+
+// Export the image to Google Drive
+Export.image.toDrive({
+  image: annualMeanRH,
+  description: 'RelativeHumidity_2023_StudyArea',
+  folder: 'GEE_exports',
+  fileNamePrefix: 'RH2023_StudyArea',
+  region: roi,
+  scale: 1000,
+  maxPixels: 1e13
+});</pre>
+    
+    <div class="github-actions">
+      <button id="copy-btn" class="action-btn">Copy Code</button>
+      <button id="github-btn" class="action-btn">Push to GitHub</button>
+      <div id="github-commands" style="display:none; margin-top:15px;">
+        <p>Run these commands in your terminal:</p>
+        <div style="background:#282c34; color:#abb2bf; padding:15px; border-radius:4px; font-family:monospace;">
+          <code>echo "# ERA5-RH-Analysis" >> README.md</code><br>
+          <code>git init</code><br>
+          <code>git add .</code><br>
+          <code>git commit -m "Add ERA5 relative humidity analysis"</code><br>
+          <code>git branch -M main</code><br>
+          <code>git remote add origin https://github.com/p001x/ERA5-RH-Analysis.git</code><br>
+          <code>git push -u origin main</code><br>
+        </div>
+        <button id="copy-cmds-btn" class="action-btn" style="margin-top:10px;">Copy Commands</button>
+      </div>
+      <div id="status-msg" style="margin-top:10px;"></div>
+    </div>
+    
+    <div class="analysis-notes">
+      <h4>Analysis Summary:</h4>
+      <ul>
+        <li>Calculates annual mean relative humidity from ERA5-Land hourly data</li>
+        <li>Converts temperature from Kelvin to Celsius</li>
+        <li>Uses Magnus formula for accurate RH calculation</li>
+        <li>Exports results as GeoTIFF to Google Drive</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<style>
+  .climate-accordion {
+    margin: 1rem 0;
+    border: 1px solid #e1e1e1;
+    border-radius: 5px;
+    font-family: Arial, sans-serif;
+  }
+  .view-toggle {
+    width: 100%;
+    padding: 12px 20px;
+    background: #0079c1;
+    color: white;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    font-size: 16px;
+    position: relative;
+    border-radius: 4px 4px 0 0;
+  }
+  .view-toggle:after {
+    content: '▼';
+    position: absolute;
+    right: 20px;
+    font-size: 14px;
+  }
+  .view-toggle.active:after {
+    content: '▲';
+  }
+  .action-btn {
+    padding: 8px 15px;
+    margin-right: 10px;
+    background: #24292e;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .action-btn:hover {
+    background: #2c3136;
+  }
+  .code-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+  }
+  .code-content.show {
+    max-height: 3000px;
+    border: 1px solid #e1e1e1;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+  }
+  .analysis-notes {
+    padding: 15px;
+    background: #f8f9fa;
+    border-top: 1px solid #e1e1e1;
+  }
+  .analysis-notes h4 {
+    margin-top: 0;
+    color: #333;
+  }
+  .analysis-notes ul {
+    padding-left: 20px;
+    margin-bottom: 0;
+  }
+  #status-msg {
+    font-size: 14px;
+    padding: 5px;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Accordion toggle
+    const toggleBtn = document.querySelector('.view-toggle');
+    if(toggleBtn) {
+      toggleBtn.addEventListener('click', function() {
+        this.classList.toggle('active');
+        const content = this.nextElementSibling;
+        content.classList.toggle('show');
+        this.textContent = this.classList.contains('active') 
+          ? 'Hide ERA5-Land Relative Humidity Analysis ▲' 
+          : 'View ERA5-Land Relative Humidity Analysis ▼';
+      });
+    }
+
+    // Copy code button
+    document.getElementById('copy-btn')?.addEventListener('click', function() {
+      const code = document.getElementById('gee-code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        showStatus('Code copied to clipboard!', 'success');
+      });
+    });
+
+    // GitHub commands button
+    document.getElementById('github-btn')?.addEventListener('click', function() {
+      const commandsDiv = document.getElementById('github-commands');
+      commandsDiv.style.display = 'block';
+      showStatus('GitHub commands generated below', 'info');
+    });
+
+    // Copy commands button
+    document.getElementById('copy-cmds-btn')?.addEventListener('click', function() {
+      const commands = [
+        'echo "# ERA5-RH-Analysis" >> README.md',
+        'git init',
+        'git add .',
+        'git commit -m "Add ERA5 relative humidity analysis"',
+        'git branch -M main',
+        'git remote add origin https://github.com/p001x/ERA5-RH-Analysis.git',
+        'git push -u origin main'
+      ].join('\n');
+      
+      navigator.clipboard.writeText(commands).then(() => {
+        showStatus('Commands copied to clipboard!', 'success');
+      });
+    });
+
+    function showStatus(message, type) {
+      const status = document.getElementById('status-msg');
+      status.textContent = message;
+      status.style.color = type === 'success' ? 'green' : '#0079c1';
+      setTimeout(() => status.textContent = '', 3000);
+    }
+  });
+</script>
