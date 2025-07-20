@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- [Keep all the previous head content] -->
+    <!-- Add this new style for GitHub section -->
+    <style>
+        .github-section {
+            background-color: #f6f8fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 30px 0;
+            border: 1px solid #e1e4e8;
+        }
+        .github-btn {
+            background-color: #2ea44f;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .github-btn:hover {
+            background-color: #2c974b;
+        }
+        .github-commands {
+            background-color: #24292e;
+            color: #f6f8fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            margin-top: 15px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- [Keep all your existing content] -->
+    
+    <!-- Add this GitHub section at the bottom -->
+    <div class="github-section">
+        <h3>Publish to GitHub</h3>
+        <p>Make this website live using GitHub Pages:</p>
+        <button class="github-btn" onclick="showGitHubCommands()">Show GitHub Commands</button>
+        
+        <div id="github-commands" class="github-commands">
+            <p># Initialize repository and push to GitHub</p>
+            <code>echo "# colla" >> README.md</code><br>
+            <code>git init</code><br>
+            <code>git add .</code><br>
+            <code>git commit -m "first commit"</code><br>
+            <code>git branch -M main</code><br>
+            <code>git remote add origin https://github.com/p001x/colla.git</code><br>
+            <code>git push -u origin main</code><br><br>
+            
+            <p># After pushing, enable GitHub Pages:</p>
+            <p>1. Go to your repository Settings</p>
+            <p>2. Select "Pages" in the left menu</p>
+            <p>3. Set source to "Deploy from main branch"</p>
+            <p>4. Click "Save"</p>
+        </div>
+    </div>
+
+    <script>
+        // [Keep existing scripts]
+        
+        // Add this new function
+        function showGitHubCommands() {
+            const commandsDiv = document.getElementById('github-commands');
+            commandsDiv.style.display = commandsDiv.style.display === 'block' ? 'none' : 'block';
+        }
+    </script>
+</body>
+</html>
